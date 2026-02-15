@@ -69,6 +69,8 @@ sxs -v -f text script.sh
 
 ```
 sxs [dialect] <file> [options]
+sxs rules new [file] [options]
+sxs policy new [file] [options]
 
 Dialect (optional): bash, zsh, fish, posix (default: auto)
 
@@ -78,10 +80,18 @@ Options:
   --stdin              Read from stdin
   -o, --output         Output file (default: stdout)
   --no-builtin         Disable builtin rules
-  --block-threshold    Severity to block: Info, Warning, High, Critical
+  --block-threshold    Severity to block: Info, Warning, High, Critical (default: High)
   -q, --quiet          Only output findings
   -v, --verbose        Verbose output
   --version            Show version
+  -h, --help           Show help message (supports --format json)
+
+Subcommands:
+  rules new            Generate custom rules template
+  policy new           Generate policy configuration template
+
+For subcommand help: sxs rules new --help or sxs policy new --help
+For JSON help output: append --format json to any help command
 ```
 
 ## Built-in Security Rules
@@ -201,6 +211,45 @@ sxs -f sarif script.sh > results.sarif
 - `1` - Scan failed (runtime error)
 - `2` - Blocking findings detected (exceeds block threshold)
 
+## Help System
+
+SXS provides comprehensive help through command-line flags with support for both human-readable and machine-readable output formats.
+
+### Getting Help
+
+```bash
+# Text help (default)
+sxs --help
+sxs -h
+sxs rules new --help
+sxs policy new --help
+
+# JSON help (machine-readable)
+sxs --help --format json
+sxs --help -f json
+sxs --help --format=json
+sxs rules new --help --format json
+sxs policy new --help --format json
+```
+
+### Help Output Formats
+
+- **Text format**: Human-readable output with examples and descriptions
+- **JSON format**: Structured machine-readable output for scripting and automation
+
+The JSON help output includes:
+- Command information and version
+- Usage patterns
+- Available commands and subcommands
+- Complete option descriptions with defaults
+- Dialect information
+- Examples
+
+### Version Information
+```bash
+sxs --version
+```
+
 ## Integration
 
 ### Zephyr Shell Module Loader
@@ -210,9 +259,10 @@ SXS is designed to integrate with [Zephyr](https://github.com/zephyr-systems/zep
 - Config is auto-loaded from the module directory
 - Environment variable `ZEPHYR_SXS_DIR` is set by module's `init.zsh` to specify config location
 - Template generation (`sxs rules new`, `sxs policy new`) defaults to module directory
-- Shell scripts in modules are automatically scanned before loading
 
 For custom module development using SXS, see [CONFIG_GUIDE.md](docs/CONFIG_GUIDE.md#custom-module-development).
+
+**Note:** Automatic scanning of shell scripts before module loading is a feature of the `sxs-zephyr-module` (separate package), not the standalone SXS tool.
 
 ## Development
 

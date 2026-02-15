@@ -378,3 +378,45 @@ Invalid configuration will cause SXS to exit with error message.
 - Verify severity values are valid
 - Ensure confidence is 0.0-1.0
 - Confirm rule_id is unique
+## Getting Help
+
+SXS provides comprehensive help through command-line flags with support for both human-readable and machine-readable output formats.
+
+### General Help
+```bash
+# Text help (default)
+sxs --help
+sxs -h
+
+# JSON help (machine-readable)
+sxs --help --format json
+sxs --help -f json
+sxs --help --format=json
+```
+
+### Subcommand Help
+```bash
+# Text help
+sxs rules new --help
+sxs rules new -h
+sxs policy new --help
+sxs policy new -h
+
+# JSON help
+sxs rules new --help --format json
+sxs policy new --help --format json
+```
+
+### Version Information
+```bash
+sxs --version
+```
+
+### Help Output Formats
+
+- **Text format**: Human-readable output with examples and descriptions
+- **JSON format**: Structured machine-readable output for scripting and automation
+
+The JSON help output provides structured data including command information, usage patterns, available options with defaults, and examples. This is useful for programmatic access and integration with other tools.
+
+The help system provides detailed information about commands, options, and examples for using SXS effectively.

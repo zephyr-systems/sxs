@@ -48,6 +48,10 @@ print_usage :: proc() {
 	fmt.println("       sxs rules new [file]")
 	fmt.println("       sxs policy new [file]")
 	fmt.println("")
+	fmt.println("Commands:")
+	fmt.println("  rules new [file]     Generate custom rules template")
+	fmt.println("  policy new [file]    Generate policy configuration template")
+	fmt.println("")
 	fmt.println("Dialect (optional): bash, zsh, fish, posix (default: auto)")
 	fmt.println("")
 	fmt.println("Options:")
@@ -56,10 +60,11 @@ print_usage :: proc() {
 	fmt.println("  --stdin              Read from stdin")
 	fmt.println("  -o, --output         Output file (default: stdout)")
 	fmt.println("  --no-builtin         Disable builtin rules")
-	fmt.println("  --block-threshold    Severity to block: Info, Warning, High, Critical")
+	fmt.println("  --block-threshold    Severity to block: Info, Warning, High, Critical (default: High)")
 	fmt.println("  -q, --quiet          Only output findings")
 	fmt.println("  -v, --verbose        Verbose output")
 	fmt.println("  --version            Show version")
+	fmt.println("  -h, --help           Show this help message")
 	fmt.println("")
 	fmt.println("Examples:")
 	fmt.println("  sxs script.sh")
@@ -67,6 +72,96 @@ print_usage :: proc() {
 	fmt.println("  cat script.sh | sxs --stdin")
 	fmt.println("  sxs -f sarif script.sh > results.sarif")
 	fmt.println("  sxs rules new")
+	fmt.println("  sxs rules new --help")
+	fmt.println("  sxs policy new --help")
+	os.exit(0)
+}
+
+print_rules_new_help :: proc(args: []string, arg_index: int) {
+	// Check if format is specified
+	if arg_index < len(args) {
+		next_arg := args[arg_index]
+		// Handle --format json
+		if next_arg == "-f" || next_arg == "--format" {
+			if arg_index + 1 < len(args) {
+				format_arg := args[arg_index + 1]
+				if format_arg == "json" {
+					print_rules_new_json()
+					os.exit(0)
+				}
+			}
+		}
+		// Handle --format=json (with equals)
+		if strings.has_prefix(next_arg, "--format=") {
+			format_value := strings.trim_prefix(next_arg, "--format=")
+			if format_value == "json" {
+				print_rules_new_json()
+				os.exit(0)
+			}
+		}
+	}
+	
+	fmt.println("SXS rules new - Generate custom rules template")
+	fmt.println("")
+	fmt.println("Usage: sxs rules new [file]")
+	fmt.println("")
+	fmt.println("Description:")
+	fmt.println("  Generate a template for custom security rules.")
+	fmt.println("  If no file is specified, saves to:")
+	fmt.println("    - $ZEPHYR_SXS_DIR/sxs.json (if ZEPHYR_SXS_DIR is set)")
+	fmt.println("    - ./sxs.json (otherwise)")
+	fmt.println("")
+	fmt.println("Options:")
+	fmt.println("  -h, --help           Show this help message")
+	fmt.println("")
+	fmt.println("Examples:")
+	fmt.println("  sxs rules new")
+	fmt.println("  sxs rules new custom-rules.json")
+	fmt.println("  sxs rules new ./config/")
+	os.exit(0)
+}
+
+print_policy_new_help :: proc(args: []string, arg_index: int) {
+	// Check if format is specified
+	if arg_index < len(args) {
+		next_arg := args[arg_index]
+		// Handle --format json
+		if next_arg == "-f" || next_arg == "--format" {
+			if arg_index + 1 < len(args) {
+				format_arg := args[arg_index + 1]
+				if format_arg == "json" {
+					print_policy_new_json()
+					os.exit(0)
+				}
+			}
+		}
+		// Handle --format=json (with equals)
+		if strings.has_prefix(next_arg, "--format=") {
+			format_value := strings.trim_prefix(next_arg, "--format=")
+			if format_value == "json" {
+				print_policy_new_json()
+				os.exit(0)
+			}
+		}
+	}
+	
+	fmt.println("SXS policy new - Generate policy configuration template")
+	fmt.println("")
+	fmt.println("Usage: sxs policy new [file]")
+	fmt.println("")
+	fmt.println("Description:")
+	fmt.println("  Generate a template for policy configuration.")
+	fmt.println("  If no file is specified, saves to:")
+	fmt.println("    - $ZEPHYR_SXS_DIR/sxs.json (if ZEPHYR_SXS_DIR is set)")
+	fmt.println("    - ./sxs.json (otherwise)")
+	fmt.println("")
+	fmt.println("Options:")
+	fmt.println("  -h, --help           Show this help message")
+	fmt.println("")
+	fmt.println("Examples:")
+	fmt.println("  sxs policy new")
+	fmt.println("  sxs policy new my-policy.json")
+	fmt.println("  sxs policy new ./config/")
 	os.exit(0)
 }
 
@@ -85,6 +180,10 @@ parse_options :: proc() -> CLI_Options {
 		if arg == "rules" && i + 1 < len(args) && args[i + 1] == "new" {
 			opts.template = "rules"
 			i += 2
+			// Check for --help after subcommand
+			if i < len(args) && (args[i] == "--help" || args[i] == "-h") {
+				print_rules_new_help(args, i + 1)
+			}
 			// Capture optional file path
 			if i < len(args) && !strings.has_prefix(args[i], "-") {
 				append(&opts.files, args[i])
@@ -95,6 +194,10 @@ parse_options :: proc() -> CLI_Options {
 		if arg == "policy" && i + 1 < len(args) && args[i + 1] == "new" {
 			opts.template = "policy"
 			i += 2
+			// Check for --help after subcommand
+			if i < len(args) && (args[i] == "--help" || args[i] == "-h") {
+				print_policy_new_help(args, i + 1)
+			}
 			// Capture optional file path
 			if i < len(args) && !strings.has_prefix(args[i], "-") {
 				append(&opts.files, args[i])
@@ -104,6 +207,28 @@ parse_options :: proc() -> CLI_Options {
 		}
 		
 		if arg == "--help" || arg == "-h" {
+			// Check if next argument is --format or --format=json
+			if i + 1 < len(args) {
+				next_arg := args[i + 1]
+				// Handle --format json
+				if next_arg == "-f" || next_arg == "--format" {
+					if i + 2 < len(args) {
+						format_arg := args[i + 2]
+						if format_arg == "json" {
+							print_usage_json()
+							os.exit(0)
+						}
+					}
+				}
+				// Handle --format=json (with equals)
+				if strings.has_prefix(next_arg, "--format=") {
+					format_value := strings.trim_prefix(next_arg, "--format=")
+					if format_value == "json" {
+						print_usage_json()
+						os.exit(0)
+					}
+				}
+			}
 			print_usage()
 		}
 		if arg == "--version" {
@@ -711,4 +836,124 @@ print_policy_template :: proc(path: string) {
 	
 	os.write_entire_file(output_path, transmute([]u8)content)
 	fmt.println("Created policy template:", output_path)
+}
+print_usage_json :: proc() {
+	json := `{
+  "command": "sxs",
+  "version": "` + VERSION + `",
+  "description": "ShellX Scanner - CLI tool for security scanning shell scripts",
+  "usage": [
+    "sxs [dialect] <file> [options]",
+    "sxs rules new [file]",
+    "sxs policy new [file]"
+  ],
+  "commands": [
+    {
+      "name": "rules new",
+      "description": "Generate custom rules template"
+    },
+    {
+      "name": "policy new", 
+      "description": "Generate policy configuration template"
+    }
+  ],
+  "dialects": ["bash", "zsh", "fish", "posix", "auto"],
+  "options": [
+    {
+      "flag": "-f, --format",
+      "description": "Output format: json, text, sarif",
+      "default": "json"
+    },
+    {
+      "flag": "-p, --policy",
+      "description": "Path to policy file"
+    },
+    {
+      "flag": "--stdin",
+      "description": "Read from stdin"
+    },
+    {
+      "flag": "-o, --output",
+      "description": "Output file",
+      "default": "stdout"
+    },
+    {
+      "flag": "--no-builtin",
+      "description": "Disable builtin rules"
+    },
+    {
+      "flag": "--block-threshold",
+      "description": "Severity to block: Info, Warning, High, Critical",
+      "default": "High"
+    },
+    {
+      "flag": "-q, --quiet",
+      "description": "Only output findings"
+    },
+    {
+      "flag": "-v, --verbose",
+      "description": "Verbose output"
+    },
+    {
+      "flag": "--version",
+      "description": "Show version"
+    },
+    {
+      "flag": "-h, --help",
+      "description": "Show this help message"
+    }
+  ],
+  "examples": [
+    "sxs script.sh",
+    "sxs bash script.sh",
+    "cat script.sh | sxs --stdin",
+    "sxs -f sarif script.sh > results.sarif",
+    "sxs rules new",
+    "sxs rules new --help",
+    "sxs policy new --help"
+  ]
+}`
+	fmt.println(json)
+}
+
+print_rules_new_json :: proc() {
+	json := `{
+  "command": "sxs rules new",
+  "description": "Generate custom rules template",
+  "usage": "sxs rules new [file]",
+  "description_detail": "Generate a template for custom security rules. If no file is specified, saves to: $ZEPHYR_SXS_DIR/sxs.json (if ZEPHYR_SXS_DIR is set) or ./sxs.json (otherwise)",
+  "options": [
+    {
+      "flag": "-h, --help",
+      "description": "Show this help message"
+    }
+  ],
+  "examples": [
+    "sxs rules new",
+    "sxs rules new custom-rules.json",
+    "sxs rules new ./config/"
+  ]
+}`
+	fmt.println(json)
+}
+
+print_policy_new_json :: proc() {
+	json := `{
+  "command": "sxs policy new",
+  "description": "Generate policy configuration template",
+  "usage": "sxs policy new [file]",
+  "description_detail": "Generate a template for policy configuration. If no file is specified, saves to: $ZEPHYR_SXS_DIR/sxs.json (if ZEPHYR_SXS_DIR is set) or ./sxs.json (otherwise)",
+  "options": [
+    {
+      "flag": "-h, --help",
+      "description": "Show this help message"
+    }
+  ],
+  "examples": [
+    "sxs policy new",
+    "sxs policy new my-policy.json",
+    "sxs policy new ./config/"
+  ]
+}`
+	fmt.println(json)
 }
