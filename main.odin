@@ -5,6 +5,8 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
+import "config"
+import "formatter"
 import "../shellx"
 
 VERSION :: "0.1.0"

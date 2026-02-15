@@ -1,4 +1,4 @@
-package sxs
+package config
 
 import "core:encoding/json"
 import "core:fmt"

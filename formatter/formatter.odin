@@ -1,4 +1,4 @@
-package sxs
+package formatter
 
 import "core:encoding/json"
 import "core:fmt"
@@ -206,7 +206,7 @@ format_result_text :: proc(result: Scan_Result, verbose: bool, source: string) -
 	return strings.to_string(builder)
 }
 
-format_result_sarif :: proc(result: Scan_Result, source: string) -> string {
+format_result_sarif :: proc(result: Scan_Result, source: string, version: string) -> string {
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 	
@@ -232,7 +232,7 @@ format_result_sarif :: proc(result: Scan_Result, source: string) -> string {
 	strings.write_string(&builder, `          "informationUri": "https://github.com/shellx/sxs",`)
 	strings.write_string(&builder, nl)
 	strings.write_string(&builder, `          "version": "`)
-	strings.write_string(&builder, VERSION)
+	strings.write_string(&builder, version)
 	strings.write_string(&builder, `",`)
 	strings.write_string(&builder, nl)
 	strings.write_string(&builder, `          "rules": []`)
