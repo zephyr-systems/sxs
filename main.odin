@@ -38,6 +38,7 @@ CLI_Options :: struct {
 	quiet: bool,
 	verbose: bool,
 	version: bool,
+	list_rules: bool,
 	template: string,
 }
 
@@ -64,6 +65,7 @@ print_usage :: proc() {
 	fmt.println("  -q, --quiet          Only output findings")
 	fmt.println("  -v, --verbose        Verbose output")
 	fmt.println("  --version            Show version")
+	fmt.println("  --list-rules         List all available security rules")
 	fmt.println("  -h, --help           Show this help message")
 	fmt.println("")
 	fmt.println("Examples:")
@@ -237,6 +239,12 @@ parse_options :: proc() -> CLI_Options {
 			continue
 		}
 		
+		if arg == "--list-rules" {
+			opts.list_rules = true
+			i += 1
+			continue
+		}
+		
 		if arg == "--stdin" {
 			opts.stdin = true
 			i += 1
@@ -330,7 +338,7 @@ parse_options :: proc() -> CLI_Options {
 		os.exit(0)
 	}
 	
-	if len(opts.files) == 0 && !opts.stdin && opts.template == "" {
+	if len(opts.files) == 0 && !opts.stdin && opts.template == "" && !opts.list_rules {
 		print_usage()
 	}
 	
@@ -734,6 +742,10 @@ main :: proc() {
 		os.exit(0)
 	}
 	
+	if opts.list_rules {
+		list_rules(opts, cfg)
+	}
+	
 	result := run_scan(opts, cfg)
 	
 	source := ""
@@ -956,4 +968,261 @@ print_policy_new_json :: proc() {
   ]
 }`
 	fmt.println(json)
+}
+// Built-in security rules data
+Builtin_Rule :: struct {
+	id: string,
+	severity: string,
+	category: string,
+	description: string,
+}
+
+BUILTIN_RULES :: []Builtin_Rule{
+	{"sec.pipe_download_exec", "Critical", "execution", "Download piped to shell"},
+	{"sec.eval_download", "Critical", "execution", "Eval with network content"},
+	{"sec.dangerous_rm", "Critical", "filesystem", "Destructive rm -rf"},
+	{"sec.overpermissive_chmod", "Warning", "permissions", "chmod 777"},
+	{"sec.source_tmp", "High", "source", "Source from /tmp"},
+	{"sec.ast.eval", "High", "execution", "AST-detected eval"},
+	{"sec.ast.dynamic_exec", "Critical", "execution", "Dynamic command substitution"},
+	{"sec.ast.source", "High", "source", "Runtime source invocation"},
+	{"sec.ast.pipe_download_exec", "Critical", "execution", "AST pipe download to shell"},
+	{"sec.ast.shell_dash_c", "High", "execution", "Shell -c execution"},
+	{"sec.ast.shell_dash_c_dynamic", "Critical", "execution", "Dynamic -c command"},
+	{"sec.ast.source_process_subst", "Critical", "source", "Source process substitution"},
+	{"sec.ast.indirect_exec", "High", "execution", "Indirect command execution"},
+}
+
+Rule_Info :: struct {
+	id: string,
+	rule_type: string, // "builtin" or "custom"
+	severity: string,
+	category: string,
+	description: string,
+	enabled: bool,
+	match_kind: string,
+	pattern: string,
+	confidence: f32,
+}
+
+list_rules :: proc(opts: CLI_Options, cfg: config.SXS_Config) {
+	all_rules := make([dynamic]Rule_Info, 0, len(BUILTIN_RULES) + len(cfg.custom_rules))
+
+	for builtin in BUILTIN_RULES {
+		info := Rule_Info{
+			id = builtin.id,
+			rule_type = "builtin",
+			severity = builtin.severity,
+			category = builtin.category,
+			description = builtin.description,
+			enabled = cfg.use_builtin_rules,
+			match_kind = "builtin",
+		}
+
+		for override in cfg.rule_overrides {
+			if override.rule_id == builtin.id {
+				info.enabled = cfg.use_builtin_rules && override.enabled
+				if override.severity_override != "" {
+					info.severity = override.severity_override
+				}
+				break
+			}
+		}
+
+		append(&all_rules, info)
+	}
+
+	for custom_rule in cfg.custom_rules {
+		info := Rule_Info{
+			id = custom_rule.rule_id,
+			rule_type = "custom",
+			severity = custom_rule.severity,
+			category = custom_rule.category,
+			description = custom_rule.message,
+			enabled = custom_rule.enabled,
+			match_kind = custom_rule.match_kind,
+			pattern = custom_rule.pattern,
+			confidence = custom_rule.confidence,
+		}
+		append(&all_rules, info)
+	}
+
+	switch opts.format {
+	case .JSON:
+		list_rules_json(all_rules[:], opts.verbose)
+	case .Text:
+		list_rules_text(all_rules[:], opts.verbose)
+	case .SARIF:
+		// SARIF is scan-results format; list-rules falls back to text.
+		list_rules_text(all_rules[:], opts.verbose)
+	}
+
+	delete(all_rules)
+	os.exit(0)
+}
+
+list_rules_text :: proc(rules: []Rule_Info, verbose: bool) {
+	builtin_count := 0
+	custom_count := 0
+	enabled_count := 0
+	for rule in rules {
+		if rule.rule_type == "builtin" {
+			builtin_count += 1
+		} else {
+			custom_count += 1
+		}
+		if rule.enabled {
+			enabled_count += 1
+		}
+	}
+
+	if verbose {
+		fmt.println("SXS Security Rules (verbose)")
+		fmt.println("==============================================================================================================")
+		fmt.printf("%-30s %-8s %-10s %-12s %-7s %-12s %s\n",
+			"ID", "Type", "Severity", "Category", "Enabled", "Match Kind", "Description")
+		fmt.println("--------------------------------------------------------------------------------------------------------------")
+
+		for rule in rules {
+			enabled := "No"
+			if rule.enabled {
+				enabled = "Yes"
+			}
+			fmt.printf("%-30s %-8s %-10s %-12s %-7s %-12s %s\n",
+				rule.id,
+				rule.rule_type,
+				rule.severity,
+				rule.category,
+				enabled,
+				rule.match_kind,
+				rule.description)
+			if rule.rule_type == "custom" && rule.pattern != "" {
+				fmt.printf("  pattern: %s (confidence: %.2f)\n", rule.pattern, rule.confidence)
+			}
+		}
+	} else {
+		fmt.println("SXS Security Rules")
+		fmt.println("======================================================================================")
+		fmt.printf("%-30s %-8s %-10s %-12s %s\n",
+			"ID", "Type", "Severity", "Category", "Description")
+		fmt.println("--------------------------------------------------------------------------------------")
+
+		for rule in rules {
+			fmt.printf("%-30s %-8s %-10s %-12s %s\n",
+				rule.id,
+				rule.rule_type,
+				rule.severity,
+				rule.category,
+				rule.description)
+		}
+	}
+
+	fmt.println("")
+	fmt.printf("Total: %d (builtin: %d, custom: %d, enabled: %d)\n",
+		len(rules), builtin_count, custom_count, enabled_count)
+}
+
+list_rules_json :: proc(rules: []Rule_Info, verbose: bool) {
+	builtin_count := 0
+	custom_count := 0
+	enabled_count := 0
+	for rule in rules {
+		if rule.rule_type == "builtin" {
+			builtin_count += 1
+		} else {
+			custom_count += 1
+		}
+		if rule.enabled {
+			enabled_count += 1
+		}
+	}
+
+	fmt.println("{")
+	fmt.println(`  "command": "sxs --list-rules",`)
+	fmt.printf("  \"total_rules\": %d,\n", len(rules))
+	fmt.println("  \"counts\": {")
+	fmt.printf("    \"builtin\": %d,\n", builtin_count)
+	fmt.printf("    \"custom\": %d,\n", custom_count)
+	fmt.printf("    \"enabled\": %d\n", enabled_count)
+	fmt.println("  },")
+	fmt.println("  \"rules\": [")
+
+		for rule, i in rules {
+			escaped_id := escape_json_string(rule.id)
+			escaped_type := escape_json_string(rule.rule_type)
+			escaped_severity := escape_json_string(rule.severity)
+		escaped_category := escape_json_string(rule.category)
+		escaped_description := escape_json_string(rule.description)
+		escaped_match_kind := escape_json_string(rule.match_kind)
+		escaped_pattern := escape_json_string(rule.pattern)
+
+		enabled := "false"
+		if rule.enabled {
+			enabled = "true"
+		}
+
+		fmt.println("    {")
+		fmt.printf("      \"id\": \"%s\",\n", escaped_id)
+		fmt.printf("      \"type\": \"%s\",\n", escaped_type)
+		fmt.printf("      \"severity\": \"%s\",\n", escaped_severity)
+		fmt.printf("      \"category\": \"%s\",\n", escaped_category)
+		fmt.printf("      \"enabled\": %s,\n", enabled)
+
+		if verbose || rule.rule_type == "custom" {
+			fmt.printf("      \"description\": \"%s\",\n", escaped_description)
+			fmt.printf("      \"match_kind\": \"%s\"", escaped_match_kind)
+			if rule.rule_type == "custom" {
+				fmt.println(",")
+				fmt.printf("      \"pattern\": \"%s\",\n", escaped_pattern)
+				fmt.printf("      \"confidence\": %.2f\n", rule.confidence)
+			} else {
+				fmt.println("")
+			}
+		} else {
+			fmt.printf("      \"description\": \"%s\"\n", escaped_description)
+		}
+
+		fmt.print("    }")
+			if i < len(rules)-1 {
+				fmt.print(",")
+			}
+			fmt.println("")
+			delete(escaped_id)
+			delete(escaped_type)
+			delete(escaped_severity)
+			delete(escaped_category)
+			delete(escaped_description)
+			delete(escaped_match_kind)
+			delete(escaped_pattern)
+		}
+
+	fmt.println("  ]")
+	fmt.println("}")
+}
+
+escape_json_string :: proc(s: string) -> string {
+	builder := strings.builder_make()
+	for c in s {
+		switch c {
+		case '"':
+			strings.write_string(&builder, "\\\"")
+		case '\\':
+			strings.write_string(&builder, "\\\\")
+		case '\b':
+			strings.write_string(&builder, "\\b")
+		case '\f':
+			strings.write_string(&builder, "\\f")
+		case '\n':
+			strings.write_string(&builder, "\\n")
+		case '\r':
+			strings.write_string(&builder, "\\r")
+		case '\t':
+			strings.write_string(&builder, "\\t")
+		case:
+			strings.write_rune(&builder, c)
+		}
+	}
+	result := strings.clone(strings.to_string(builder))
+	strings.builder_destroy(&builder)
+	return result
 }
