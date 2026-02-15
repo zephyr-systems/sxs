@@ -326,9 +326,8 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 	// Note: Config is already merged with CLI for no_builtin and block_threshold
 	// via merge_config_with_cli(), so we use opts (merged values)
 	
-	if opts.no_builtin {
-		policy.use_builtin_rules = false
-	}
+	// Explicitly set use_builtin_rules based on config/CLI
+	policy.use_builtin_rules = !opts.no_builtin
 	policy.block_threshold = severity_to_shellx(opts.block_threshold)
 	
 	// Apply config rule_overrides to ShellX policy
@@ -445,17 +444,6 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 		policy.ruleset_version = strings.clone(cfg.ruleset_version)
 	}
 	
-	// Note: allowlist_paths and allowlist_commands are not directly supported
-	// by ShellX policy system. These would need to be implemented as
-	// post-processing filters in SXS after scanning.
-	// For now, we'll log if they're configured but not implemented.
-	if len(cfg.allowlist_paths) > 0 || len(cfg.allowlist_commands) > 0 {
-		// Just note in verbose mode, don't add to errors
-		if opts.verbose {
-			fmt.eprintln("Note: allowlist_paths and allowlist_commands config features require post-processing implementation")
-		}
-	}
-	
 	options := shellx.DEFAULT_SECURITY_SCAN_OPTIONS
 	shell_dialect := dialect_to_shellx(opts.dialect)
 	
@@ -472,6 +460,19 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 		}
 		
 		scan_result := shellx.scan_security(string(data), shell_dialect, policy, "<stdin>", options)
+		if opts.verbose {
+			fmt.eprintln(fmt.aprintf(
+				"[sxs] stdin scan policy: builtin=%v custom=%d overrides=%d allow_paths=%d allow_cmds=%d block=%s ruleset=%s dialect=%v",
+				policy.use_builtin_rules,
+				len(policy.custom_rules),
+				len(policy.rule_overrides),
+				len(policy.allowlist_paths),
+				len(policy.allowlist_commands),
+				opts.block_threshold,
+				policy.ruleset_version,
+				shell_dialect,
+			))
+		}
 		
 		for f in scan_result.findings {
 			append(&result.findings, convert_finding(f))
@@ -485,6 +486,17 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 			lines_scanned = scan_result.stats.lines_scanned,
 			rules_evaluated = scan_result.stats.rules_evaluated,
 			duration_ms = scan_result.stats.duration_ms,
+		}
+		if opts.verbose {
+			fmt.eprintln(fmt.aprintf(
+				"[sxs] stdin scan result: success=%v blocked=%v findings=%d lines=%d rules_evaluated=%d ruleset=%s",
+				scan_result.success,
+				scan_result.blocked,
+				len(scan_result.findings),
+				scan_result.stats.lines_scanned,
+				scan_result.stats.rules_evaluated,
+				scan_result.ruleset_version,
+			))
 		}
 		
 		shellx.destroy_security_scan_result(&scan_result)
@@ -504,6 +516,19 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 			}
 			
 			scan_result := shellx.scan_security_file(file, shell_dialect, policy, options)
+			if opts.verbose {
+				fmt.eprintln(fmt.aprintf(
+					"[sxs] file scan (%s): success=%v blocked=%v findings=%d lines=%d rules_evaluated=%d ruleset=%s builtin=%v",
+					file,
+					scan_result.success,
+					scan_result.blocked,
+					len(scan_result.findings),
+					scan_result.stats.lines_scanned,
+					scan_result.stats.rules_evaluated,
+					scan_result.ruleset_version,
+					policy.use_builtin_rules,
+				))
+			}
 			
 			for f in scan_result.findings {
 				append(&result.findings, convert_finding(f))
@@ -518,6 +543,9 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 			result.stats.lines_scanned += scan_result.stats.lines_scanned
 			result.stats.rules_evaluated += scan_result.stats.rules_evaluated
 			result.stats.duration_ms += scan_result.stats.duration_ms
+			if result.ruleset_version == "" && scan_result.ruleset_version != "" {
+				result.ruleset_version = strings.clone(scan_result.ruleset_version)
+			}
 			
 			shellx.destroy_security_scan_result(&scan_result)
 		}
@@ -548,7 +576,10 @@ merge_config_with_cli :: proc(cfg: config.SXS_Config, cli: CLI_Options) -> CLI_O
 main :: proc() {
 	// Load config first
 	config_data, config_location := config.find_config()
-	cfg: config.SXS_Config
+	cfg := config.SXS_Config{
+		use_builtin_rules = true,
+		block_threshold = "High",
+	}
 	if config_data != "" {
 		parsed_cfg, ok := config.parse_sxs_config(config_data)
 		if ok {
