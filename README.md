@@ -14,15 +14,27 @@ A CLI tool for security scanning shell scripts, powered by [ShellX](https://gith
 ## Requirements
 
 - [Odin](https://odin-lang.org/) compiler (latest version)
-- [ShellX](https://github.com/shellx/shellx) (included as dependency)
+- [ShellX](https://github.com/zephyr-systems/shellx) cloned alongside SXS (see below)
 
 ## Installation
 
 ### From Source
 
+SXS expects ShellX to be cloned at the same parent directory level:
+
 ```bash
 # Clone the repository
 git clone https://github.com/zephyr-systems/sxs.git
+
+# Clone ShellX at the same level (../shellx)
+git clone https://github.com/zephyr-systems/shellx.git
+
+# Or if you have both repos already:
+# Ensure directory structure is:
+# odin/
+#   shellx/
+#   sxs/
+
 cd sxs
 
 # Build
