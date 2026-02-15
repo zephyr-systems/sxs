@@ -1,6 +1,10 @@
 # SXS
 sxs
 
+# Git submodule artifacts (not needed)
+.gitmodules
+_packages/
+
 # Internal documentation (not for repo)
 docs_internal/
 scanner_plan.md
