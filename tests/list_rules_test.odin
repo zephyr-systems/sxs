@@ -1,8 +1,6 @@
 package tests
 
 import "core:fmt"
-import "core:os"
-import "core:strings"
 import "core:testing"
 
 @(test)
@@ -40,7 +38,8 @@ test_builtin_rules_count :: proc(t: ^testing.T) {
 	
 	// This is a constant check - we know we should have 13 rules
 	expected_count := 13
-	testing.expect(t, true, fmt.aprintf("Should have %d built-in rules", expected_count))
+	_ = expected_count
+	testing.expect(t, true, "Should have 13 built-in rules")
 }
 
 @(test)
@@ -73,7 +72,8 @@ test_json_escape_function :: proc(t: ^testing.T) {
 	for tc in test_cases {
 		// We can't actually call escape_json_string here since it's in main.odin
 		// but we can verify the concept
-		testing.expect(t, true, fmt.aprintf("Should escape: %s", tc.input))
+		_ = tc
+		testing.expect(t, true, "Should escape JSON-special characters")
 	}
 }
 
@@ -93,37 +93,4 @@ test_verbose_flag :: proc(t: ^testing.T) {
 	
 	// Verbose should show more details
 	testing.expect(t, true, "Should support -v/--verbose with --list-rules")
-}
-
-main :: proc() {
-	fmt.println("Running list rules tests...")
-	fmt.println("==========================")
-	
-	// Note: These are unit tests for the logic
-	// Integration tests would require running the actual binary
-	// which is more complex in Odin's test framework
-	
-	fmt.println("Tests verify:")
-	fmt.println("1. --list-rules flag exists and is recognized")
-	fmt.println("2. Doesn't require files to be specified")
-	fmt.println("3. Exits immediately without scanning")
-	fmt.println("4. Has 13 built-in rules")
-	fmt.println("5. Rule_Info struct is properly defined")
-	fmt.println("6. JSON escaping works")
-	fmt.println("7. --format flag compatibility")
-	fmt.println("8. -v/--verbose flag compatibility")
-	fmt.println("")
-	fmt.println("Run with: odin test tests/list_rules_test.odin -file")
-	
-	// Run tests
-	testing.run(tests = {
-		test_list_rules_flag_exists,
-		test_list_rules_no_files_required,
-		test_list_rules_exits_immediately,
-		test_builtin_rules_count,
-		test_rule_info_structure,
-		test_json_escape_function,
-		test_format_options,
-		test_verbose_flag,
-	})
 }

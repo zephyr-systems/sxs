@@ -1,8 +1,6 @@
 package tests
 
 import "core:fmt"
-import "core:os"
-import "core:strings"
 import "core:testing"
 
 @(test)
@@ -40,19 +38,4 @@ test_help_output_contains_expected_sections :: proc(t: ^testing.T) {
 	fmt.println("  Policy new help should contain policy generation info")
 	
 	testing.expect(t, true, "Help output should contain expected sections")
-}
-
-main :: proc() {
-	// Simple test runner for now
-	fmt.println("Running help system tests...")
-	fmt.println("===========================")
-	
-	// In a real test, we'd run these with proper test framework
-	// For now, just print that tests would run
-	fmt.println("Tests would verify:")
-	fmt.println("1. --help and -h flags work")
-	fmt.println("2. Subcommand help works (rules new --help, policy new --help)")
-	fmt.println("3. Help output contains required information")
-	fmt.println("")
-	fmt.println("Note: Actual test execution requires test runner integration")
 }
