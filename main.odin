@@ -39,6 +39,7 @@ CLI_Options :: struct {
 	verbose: bool,
 	version: bool,
 	list_rules: bool,
+	validate: bool,
 	template: string,
 }
 
@@ -66,6 +67,7 @@ print_usage :: proc() {
 	fmt.println("  -v, --verbose        Verbose output")
 	fmt.println("  --version            Show version")
 	fmt.println("  --list-rules         List all available security rules")
+	fmt.println("  --validate           Validate config/policy and shell script syntax")
 	fmt.println("  -h, --help           Show this help message")
 	fmt.println("")
 	fmt.println("Examples:")
@@ -76,6 +78,7 @@ print_usage :: proc() {
 	fmt.println("  sxs rules new")
 	fmt.println("  sxs rules new --help")
 	fmt.println("  sxs policy new --help")
+	fmt.println("  sxs --validate script.sh")
 	os.exit(0)
 }
 
@@ -244,6 +247,12 @@ parse_options :: proc() -> CLI_Options {
 			i += 1
 			continue
 		}
+
+		if arg == "--validate" {
+			opts.validate = true
+			i += 1
+			continue
+		}
 		
 		if arg == "--stdin" {
 			opts.stdin = true
@@ -338,7 +347,7 @@ parse_options :: proc() -> CLI_Options {
 		os.exit(0)
 	}
 	
-	if len(opts.files) == 0 && !opts.stdin && opts.template == "" && !opts.list_rules {
+	if len(opts.files) == 0 && !opts.stdin && opts.template == "" && !opts.list_rules && !opts.validate {
 		print_usage()
 	}
 	
@@ -706,6 +715,229 @@ merge_config_with_cli :: proc(cfg: config.SXS_Config, cli: CLI_Options) -> CLI_O
 	return merged
 }
 
+Validation_Error :: struct {
+	source: string,
+	message: string,
+	suggestion: string,
+	line: int,
+	column: int,
+}
+
+config_location_to_string :: proc(loc: config.Config_Location) -> string {
+	switch loc {
+	case .Local:
+		return "local"
+	case .Module:
+		return "module"
+	case .User:
+		return "user"
+	}
+	return "unknown"
+}
+
+append_validation_error :: proc(
+	errors: ^[dynamic]Validation_Error,
+	source: string,
+	message: string,
+	suggestion := "",
+	line := 0,
+	column := 0,
+) {
+	append(errors, Validation_Error{
+		source = strings.clone(source),
+		message = strings.clone(message),
+		suggestion = strings.clone(suggestion),
+		line = line,
+		column = column,
+	})
+}
+
+validate_script_content :: proc(
+	source_name: string,
+	content: string,
+	opts: CLI_Options,
+	errors: ^[dynamic]Validation_Error,
+) -> bool {
+	dialect := dialect_to_shellx(opts.dialect)
+	if opts.dialect == .Auto {
+		if source_name == "<stdin>" {
+			dialect = shellx.detect_shell(content)
+		} else {
+			dialect = shellx.detect_shell_from_path(source_name, content)
+		}
+	}
+
+	policy := shellx.DEFAULT_SECURITY_SCAN_POLICY
+	scan_opts := shellx.DEFAULT_SECURITY_SCAN_OPTIONS
+	scan_opts.ast_parse_failure_mode = .FailClosed
+
+	scan_result := shellx.scan_security(content, dialect, policy, source_name, scan_opts)
+	defer shellx.destroy_security_scan_result(&scan_result)
+
+	if scan_result.success {
+		return true
+	}
+
+	if len(scan_result.errors) == 0 {
+		append_validation_error(errors, source_name, "Syntax validation failed")
+		return false
+	}
+
+	for err in scan_result.errors {
+		append_validation_error(
+			errors,
+			source_name,
+			err.message,
+			err.suggestion,
+			err.location.line,
+			err.location.column,
+		)
+	}
+
+	return false
+}
+
+run_validate :: proc(opts: CLI_Options, cfg: config.SXS_Config, config_data: string, config_location: config.Config_Location) {
+	_ = cfg
+
+	errors := make([dynamic]Validation_Error, 0, 8)
+
+	config_checked := config_data != ""
+	config_valid := true
+	config_source := "none"
+	if config_checked {
+		config_source = config_location_to_string(config_location)
+	}
+
+	policy_checked := opts.policy_path != ""
+	policy_valid := true
+	if policy_checked {
+		_, policy_errors, ok := shellx.load_security_policy_file(opts.policy_path)
+		if !ok {
+			policy_valid = false
+			for err in policy_errors {
+				append_validation_error(
+					&errors,
+					opts.policy_path,
+					err.message,
+					err.suggestion,
+					err.location.line,
+					err.location.column,
+				)
+			}
+		}
+	}
+
+	scripts_checked := opts.stdin || len(opts.files) > 0
+	scripts_valid := true
+	script_count := len(opts.files)
+	if opts.stdin {
+		script_count += 1
+		data, ok := os.read_entire_file(os.stdin)
+		if !ok {
+			scripts_valid = false
+			append_validation_error(&errors, "<stdin>", "Failed to read from stdin")
+		} else {
+			if !validate_script_content("<stdin>", string(data), opts, &errors) {
+				scripts_valid = false
+			}
+			delete(data)
+		}
+	}
+
+	for file in opts.files {
+		data, ok := os.read_entire_file(file)
+		if !ok {
+			scripts_valid = false
+			append_validation_error(&errors, file, "Failed to read file")
+			continue
+		}
+
+		if !validate_script_content(file, string(data), opts, &errors) {
+			scripts_valid = false
+		}
+		delete(data)
+	}
+
+	valid := config_valid && policy_valid && scripts_valid
+
+	switch opts.format {
+	case .JSON:
+		fmt.println("{")
+		fmt.printf("  \"valid\": %v,\n", valid)
+		fmt.println("  \"config\": {")
+		fmt.printf("    \"checked\": %v,\n", config_checked)
+		fmt.printf("    \"source\": \"%s\",\n", escape_json_string(config_source))
+		fmt.printf("    \"valid\": %v\n", config_valid)
+		fmt.println("  },")
+		fmt.println("  \"policy\": {")
+		fmt.printf("    \"checked\": %v,\n", policy_checked)
+		fmt.printf("    \"path\": \"%s\",\n", escape_json_string(opts.policy_path))
+		fmt.printf("    \"valid\": %v\n", policy_valid)
+		fmt.println("  },")
+		fmt.println("  \"scripts\": {")
+		fmt.printf("    \"checked\": %v,\n", scripts_checked)
+		fmt.printf("    \"count\": %d,\n", script_count)
+		fmt.printf("    \"valid\": %v\n", scripts_valid)
+		fmt.println("  },")
+		fmt.println("  \"errors\": [")
+		for err, i in errors {
+			fmt.println("    {")
+			fmt.printf("      \"source\": \"%s\",\n", escape_json_string(err.source))
+			fmt.printf("      \"message\": \"%s\",\n", escape_json_string(err.message))
+			fmt.printf("      \"suggestion\": \"%s\",\n", escape_json_string(err.suggestion))
+			fmt.printf("      \"line\": %d,\n", err.line)
+			fmt.printf("      \"column\": %d\n", err.column)
+			fmt.print("    }")
+			if i < len(errors)-1 {
+				fmt.print(",")
+			}
+			fmt.println("")
+		}
+		fmt.println("  ]")
+		fmt.println("}")
+	case .Text, .SARIF:
+		if valid {
+			fmt.println("Validation successful")
+		} else {
+			fmt.println("Validation failed")
+		}
+
+		if opts.verbose {
+			fmt.printf("Config: checked=%v source=%s valid=%v\n", config_checked, config_source, config_valid)
+			fmt.printf("Policy: checked=%v path=%s valid=%v\n", policy_checked, opts.policy_path, policy_valid)
+			fmt.printf("Scripts: checked=%v count=%d valid=%v\n", scripts_checked, script_count, scripts_valid)
+		}
+
+		if len(errors) > 0 {
+			fmt.println("")
+			fmt.println("Errors:")
+			for err in errors {
+				if err.line > 0 {
+					fmt.printf("- %s:%d:%d: %s\n", err.source, err.line, err.column, err.message)
+				} else {
+					fmt.printf("- %s: %s\n", err.source, err.message)
+				}
+				if err.suggestion != "" && opts.verbose {
+					fmt.printf("  suggestion: %s\n", err.suggestion)
+				}
+			}
+		}
+	}
+
+	for err in errors {
+		delete(err.source)
+		delete(err.message)
+		delete(err.suggestion)
+	}
+	delete(errors)
+
+	if valid {
+		os.exit(0)
+	}
+	os.exit(1)
+}
+
 main :: proc() {
 	// Load config first
 	config_data, config_location := config.find_config()
@@ -744,6 +976,10 @@ main :: proc() {
 	
 	if opts.list_rules {
 		list_rules(opts, cfg)
+	}
+
+	if opts.validate {
+		run_validate(opts, cfg, config_data, config_location)
 	}
 	
 	result := run_scan(opts, cfg)
@@ -911,6 +1147,10 @@ print_usage_json :: proc() {
       "description": "Show version"
     },
     {
+      "flag": "--validate",
+      "description": "Validate config/policy and shell script syntax"
+    },
+    {
       "flag": "-h, --help",
       "description": "Show this help message"
     }
@@ -922,7 +1162,8 @@ print_usage_json :: proc() {
     "sxs -f sarif script.sh > results.sarif",
     "sxs rules new",
     "sxs rules new --help",
-    "sxs policy new --help"
+    "sxs policy new --help",
+    "sxs --validate script.sh"
   ]
 }`
 	fmt.println(json)
