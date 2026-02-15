@@ -1,5 +1,8 @@
 # SXS (ShellX Scanner)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Odin](https://img.shields.io/badge/Odin-latest-blue.svg)](https://odin-lang.org/)
+
 A CLI tool for security scanning shell scripts, powered by [ShellX](https://github.com/zephyr-systems/shellx).
 
 ## Features
