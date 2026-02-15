@@ -51,10 +51,11 @@ format_result_json :: proc(result: Scan_Result, pretty: bool) -> string {
 	if err != nil {
 		err_msg := fmt.aprintf("%v", err)
 		builder := strings.builder_make()
+		defer strings.builder_destroy(&builder)
 		strings.write_string(&builder, `{"success":false,"error":"json_marshal_failed","message":"`)
 		strings.write_string(&builder, err_msg)
 		strings.write_string(&builder, `"}`)
-		return strings.to_string(builder)
+		return strings.clone(strings.to_string(builder))
 	}
 	return string(data)
 }
@@ -66,7 +67,7 @@ format_result_text :: proc(result: Scan_Result, verbose: bool, source: string) -
 	if len(result.findings) == 0 {
 		strings.write_string(&builder, "No security findings.")
 		strings.write_rune(&builder, '\n')
-		return strings.to_string(builder)
+		return strings.clone(strings.to_string(builder))
 	}
 	
 	cyan := "\x1b[36m"
@@ -203,7 +204,7 @@ format_result_text :: proc(result: Scan_Result, verbose: bool, source: string) -
 		}
 	}
 	
-	return strings.to_string(builder)
+	return strings.clone(strings.to_string(builder))
 }
 
 format_result_sarif :: proc(result: Scan_Result, source: string, version: string) -> string {
@@ -326,7 +327,7 @@ format_result_sarif :: proc(result: Scan_Result, source: string, version: string
 	strings.write_string(&builder, "}")
 	strings.write_string(&builder, nl)
 	
-	return strings.to_string(builder)
+	return strings.clone(strings.to_string(builder))
 }
 
 escape_json_string :: proc(s: string) -> string {
@@ -350,5 +351,5 @@ escape_json_string :: proc(s: string) -> string {
 		}
 	}
 	
-	return strings.to_string(result)
+	return strings.clone(strings.to_string(result))
 }

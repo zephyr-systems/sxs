@@ -7,7 +7,7 @@ _packages/
 
 # Internal documentation (not for repo)
 docs_internal/
-scanner_plan.md
+
 
 # Build artifacts
 *.o

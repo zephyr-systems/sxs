@@ -1,0 +1,8 @@
+#!/bin/bash
+# SXS Runner - sets up library path and runs sxs
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SHELLX_DIR="$(cd "$SCRIPT_DIR/../shellx" && pwd)"
+
+export DYLD_LIBRARY_PATH="$SHELLX_DIR:$DYLD_LIBRARY_PATH"
+exec "$SCRIPT_DIR/sxs" "$@"

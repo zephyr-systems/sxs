@@ -149,16 +149,28 @@ SXS checks for configuration in this order:
 Generate config templates:
 
 ```bash
-# Generate rules template
+# Generate rules template (context-aware, see below)
 sxs rules new
 
-# Generate policy template
+# Generate policy template (context-aware, see below)
 sxs policy new
 
-# Save to file
+# Save to specific file
 sxs rules new my-rules.json
 sxs policy new my-policy.json
+
+# Save to directory
+sxs rules new ./config/
 ```
+
+#### Context-Aware Template Generation
+
+Template generation automatically adapts to your environment:
+
+- **Standalone**: `sxs rules new` → saves to `./sxs.json`
+- **Zephyr Module**: `sxs rules new` → saves to `$ZEPHYR_SXS_DIR/sxs.json`
+
+See [CONFIG_GUIDE.md](docs/CONFIG_GUIDE.md#template-generation) for details on Zephyr module setup and custom module development.
 
 ## Output Formats
 
@@ -196,8 +208,11 @@ sxs -f sarif script.sh > results.sarif
 SXS is designed to integrate with [Zephyr](https://github.com/zephyr-systems/zephyr), a shell module loader. When used as a Zephyr module:
 
 - Config is auto-loaded from the module directory
-- Environment variable `ZEPHYR_CURRENT_MODULE` is checked for module-specific rules
+- Environment variable `ZEPHYR_SXS_DIR` is set by module's `init.zsh` to specify config location
+- Template generation (`sxs rules new`, `sxs policy new`) defaults to module directory
 - Shell scripts in modules are automatically scanned before loading
+
+For custom module development using SXS, see [CONFIG_GUIDE.md](docs/CONFIG_GUIDE.md#custom-module-development).
 
 ## Development
 

@@ -1,8 +1,9 @@
 .PHONY: help build install clean run dev deps
 
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := build
 
 BINARY := sxs
+SHELLX_PATH := ../shellx
 
 VERSION := 0.1.0
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -22,11 +23,11 @@ help:
 	@echo "  dev    - Build with debug flags"
 
 deps:
-	@if [ ! -d "../shellx" ]; then \
+	@if [ ! -d "$(SHELLX_PATH)" ]; then \
 		echo "Cloning ShellX dependency..."; \
-		git clone https://github.com/zephyr-systems/shellx.git ../shellx; \
+		git clone https://github.com/zephyr-systems/shellx.git $(SHELLX_PATH); \
 	else \
-		echo "ShellX already present at ../shellx"; \
+		echo "ShellX already present at $(SHELLX_PATH)"; \
 	fi
 
 build: deps
@@ -35,6 +36,7 @@ build: deps
 install: build
 	@mkdir -p ~/.local/bin
 	@cp $(BINARY) ~/.local/bin/
+	@cp $(SHELLX_PATH)/libtree-sitter-*.dylib ~/.local/bin/
 	@echo "Installed to ~/.local/bin/sxs"
 
 clean:
