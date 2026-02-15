@@ -1,0 +1,25 @@
+# SXS
+sxs
+
+# Internal documentation (not for repo)
+docs_internal/
+scanner_plan.md
+
+# Build artifacts
+*.o
+*.obj
+*.exe
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Odin
+*.bin
