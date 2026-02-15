@@ -1,4 +1,4 @@
-.PHONY: help build install clean run dev
+.PHONY: help build install clean run dev deps
 
 .DEFAULT_GOAL := help
 
@@ -15,12 +15,21 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Targets:"
-	@echo "  build   - Build the sxs binary"
+	@echo "  deps   - Clone ShellX dependency (if not already present)"
+	@echo "  build  - Build the sxs binary"
 	@echo "  install - Install to ~/.local/bin"
-	@echo "  clean   - Remove build artifacts"
-	@echo "  dev     - Build with debug flags"
+	@echo "  clean  - Remove build artifacts"
+	@echo "  dev    - Build with debug flags"
 
-build:
+deps:
+	@if [ ! -d "../shellx" ]; then \
+		echo "Cloning ShellX dependency..."; \
+		git clone https://github.com/zephyr-systems/shellx.git ../shellx; \
+	else \
+		echo "ShellX already present at ../shellx"; \
+	fi
+
+build: deps
 	odin build . -o:size -out:$(BINARY) $(BUILD_METADATA_FLAGS)
 
 install: build
@@ -31,5 +40,5 @@ install: build
 clean:
 	rm -f $(BINARY)
 
-dev:
+dev: deps
 	odin build . -o:none -debug -out:$(BINARY) $(BUILD_METADATA_FLAGS)
