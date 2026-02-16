@@ -1,4 +1,4 @@
-.PHONY: help build install clean run dev deps
+.PHONY: help build install install-man clean run dev deps bundle-libs
 
 .DEFAULT_GOAL := build
 
@@ -18,7 +18,9 @@ help:
 	@echo "Targets:"
 	@echo "  deps   - Clone ShellX dependency (if not already present)"
 	@echo "  build  - Build the sxs binary"
+	@echo "  bundle-libs - Copy required tree-sitter dylibs next to sxs binary"
 	@echo "  install - Install to ~/.local/bin"
+	@echo "  install-man - Install man page to ~/.local/share/man/man1"
 	@echo "  clean  - Remove build artifacts"
 	@echo "  dev    - Build with debug flags"
 
@@ -30,14 +32,25 @@ deps:
 		echo "ShellX already present at $(SHELLX_PATH)"; \
 	fi
 
-build: deps
+build: deps bundle-libs
 	odin build . -o:size -out:$(BINARY) $(BUILD_METADATA_FLAGS)
+
+bundle-libs: deps
+	@cp $(SHELLX_PATH)/libtree-sitter-*.dylib .
 
 install: build
 	@mkdir -p ~/.local/bin
+	@mkdir -p ~/.local/share/man/man1
 	@cp $(BINARY) ~/.local/bin/
 	@cp $(SHELLX_PATH)/libtree-sitter-*.dylib ~/.local/bin/
+	@cp docs/sxs.1 ~/.local/share/man/man1/
 	@echo "Installed to ~/.local/bin/sxs"
+	@echo "Installed man page to ~/.local/share/man/man1/sxs.1"
+
+install-man:
+	@mkdir -p ~/.local/share/man/man1
+	@cp docs/sxs.1 ~/.local/share/man/man1/
+	@echo "Installed man page to ~/.local/share/man/man1/sxs.1"
 
 clean:
 	rm -f $(BINARY)

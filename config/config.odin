@@ -65,6 +65,7 @@ Custom_Rule :: struct {
 	phases: [dynamic]string,
 	command_name: string,
 	arg_pattern: string,
+	prefilter_contains: string,
 	message: string,
 	suggestion: string,
 }
@@ -133,6 +134,11 @@ validate_sxs_config :: proc(cfg: ^SXS_Config) -> (bool, string) {
 				// Valid
 			case:
 				return false, fmt.aprintf("Custom rule %s invalid match_kind: %s", rule.rule_id, rule.match_kind)
+			}
+			if rule.match_kind == "Regex" &&
+				rule.prefilter_contains != "" &&
+				strings.trim_space(rule.prefilter_contains) == "" {
+				return false, fmt.aprintf("Custom rule %s prefilter_contains cannot be whitespace-only", rule.rule_id)
 			}
 			switch rule.severity {
 			case "Info", "Warning", "High", "Critical":
@@ -313,6 +319,12 @@ parse_sxs_config :: proc(data: string) -> (SXS_Config, bool) {
 							#partial switch s in arg_pattern {
 							case json.String:
 								rule.arg_pattern = strings.clone(string(s))
+							}
+						}
+						if prefilter_contains, ok := obj["prefilter_contains"]; ok {
+							#partial switch s in prefilter_contains {
+							case json.String:
+								rule.prefilter_contains = strings.clone(string(s))
 							}
 						}
 						if suggestion, ok := obj["suggestion"]; ok {

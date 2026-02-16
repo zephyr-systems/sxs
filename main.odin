@@ -15,6 +15,7 @@ import "formatter"
 import "../shellx"
 
 VERSION :: "0.1.0"
+LIST_POLICIES_JSON_SCHEMA_VERSION :: "1.0"
 BUILD_TIME :: "dev"
 
 Output_Format :: enum {
@@ -100,6 +101,7 @@ print_usage :: proc() {
 	fmt.println("  sxs --ignore 'vendor/*' script.sh")
 	fmt.println("  sxs --ignore-rule sec.overpermissive_chmod script.sh")
 	fmt.println("  sxs --list-policies")
+	fmt.println("  sxs --list-policies -f json | jq '.schema_version'")
 	os.exit(0)
 }
 
@@ -948,6 +950,11 @@ scan_single_file :: proc(
 		))
 	}
 
+	if len(scan_result.findings) > 0 {
+		delete(file_result.findings)
+		file_result.findings = make([dynamic]formatter.Finding, 0, len(scan_result.findings))
+	}
+
 	for f in scan_result.findings {
 		ignored := false
 		if has_path_ignores && finding_is_ignored_shellx(f, opts.ignore_patterns[:]) {
@@ -1142,6 +1149,7 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 					phases = phases,
 					command_name = strings.clone(custom_rule.command_name),
 					arg_pattern = strings.clone(custom_rule.arg_pattern),
+					prefilter_contains = strings.clone(custom_rule.prefilter_contains),
 					message = strings.clone(custom_rule.message),
 					suggestion = strings.clone(custom_rule.suggestion),
 				}
@@ -1310,6 +1318,19 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 				thread.destroy(t)
 			}
 			delete(threads)
+
+			total_findings := 0
+			total_errors := 0
+			for file_result in file_results {
+				total_findings += len(file_result.findings)
+				total_errors += len(file_result.errors)
+			}
+			if total_findings > 0 || total_errors > 0 {
+				delete(result.findings)
+				delete(result.errors)
+				result.findings = make([dynamic]formatter.Finding, 0, total_findings)
+				result.errors = make([dynamic]string, 0, total_errors)
+			}
 
 			for file_result in file_results {
 				aggregate_file_scan_result(&result, file_result)
@@ -1802,6 +1823,7 @@ print_rules_template :: proc(path: string) {
       "severity": "High",
       "match_kind": "Regex",
       "pattern": "dangerous_pattern",
+      "prefilter_contains": "dangerous",
       "category": "custom",
       "confidence": 0.9,
       "message": "Custom rule matched",
@@ -2473,6 +2495,7 @@ list_policies_json :: proc(policies: []Policy_Info, verbose: bool) {
 
 	fmt.println("{")
 	fmt.println(`  "command": "sxs --list-policies",`)
+	fmt.printf("  \"schema_version\": \"%s\",\n", LIST_POLICIES_JSON_SCHEMA_VERSION)
 	fmt.printf("  \"total_policies\": %d,\n", len(policies))
 	fmt.println("  \"counts\": {")
 	fmt.printf("    \"active\": %d,\n", active_count)

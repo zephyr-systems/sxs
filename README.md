@@ -36,12 +36,27 @@ make install
 
 # Or copy manually
 cp sxs ~/.local/bin/
+
+# Install man page only
+make install-man
 ```
 
 ### Homebrew (Coming Soon)
 
 ```bash
 brew install zephyr-systems/sxs/sxs
+```
+
+### Man Page
+
+Source man page is included at:
+
+- `docs/sxs.1`
+
+After install (`make install`), open it with:
+
+```bash
+man sxs
 ```
 
 ## Quick Start
@@ -160,6 +175,40 @@ sxs --list-policies -v
 sxs --list-policies --policy ./policy.json
 ```
 
+Concrete JSON output example:
+
+```json
+{
+  "command": "sxs --list-policies",
+  "schema_version": "1.0",
+  "total_policies": 2,
+  "counts": {
+    "active": 1,
+    "valid": 2
+  },
+  "policies": [
+    {
+      "name": "builtin-default",
+      "type": "builtin",
+      "source": "shellx.DEFAULT_SECURITY_SCAN_POLICY",
+      "active": true,
+      "valid": true,
+      "description": "Built-in baseline policy"
+    }
+  ]
+}
+```
+
+### Automation Contract (`--list-policies -f json`)
+
+For automation consumers, treat `schema_version` as the compatibility key.
+
+- `schema_version = "1.0"`: field names are stable for scripting.
+- Top-level stable fields: `command`, `schema_version`, `total_policies`, `counts`, `policies`.
+- `counts` stable fields: `active`, `valid`.
+- `policies[]` stable fields (non-verbose): `name`, `type`, `source`, `active`, `valid`, `description`.
+- Verbose mode (`-v`) adds extra fields; consumers should tolerate unknown additions.
+
 ## Configuration
 
 ### Config Tiers
@@ -220,6 +269,28 @@ sxs policy new my-policy.json
 # Save to directory
 sxs rules new ./config/
 ```
+
+### Regex Rule Performance Tip
+
+For expensive custom regex rules, add `prefilter_contains` so SXS can skip regex evaluation on lines that cannot match.
+
+```json
+{
+  "rule_id": "sec.custom.eval_usage",
+  "enabled": true,
+  "severity": "Warning",
+  "match_kind": "Regex",
+  "pattern": "eval[ ]+",
+  "prefilter_contains": "eval",
+  "category": "execution",
+  "confidence": 0.9,
+  "phases": ["source"],
+  "message": "Dynamic eval usage detected",
+  "suggestion": "Avoid eval on dynamic input"
+}
+```
+
+Guideline: use a narrow, required substring (for example `eval`, `curl`, `chmod`) as `prefilter_contains`.
 
 #### Context-Aware Template Generation
 
