@@ -63,6 +63,9 @@ sxs -p policy.json script.sh
 
 # Verbose output
 sxs -v -f text script.sh
+
+# Ignore findings under vendor paths
+sxs --ignore "vendor/*" script.sh
 ```
 
 ## Usage
@@ -81,9 +84,12 @@ Options:
   -o, --output         Output file (default: stdout)
   --no-builtin         Disable builtin rules
   --block-threshold    Severity to block: Info, Warning, High, Critical (default: High)
+  --ignore             Ignore findings for file paths matching a glob (repeatable)
   -q, --quiet          Only output findings
   -v, --verbose        Verbose output
   --version            Show version
+  --list-rules         List all available security rules
+  --validate           Validate config/policy and shell script syntax
   -h, --help           Show help message (supports --format json)
 
 Subcommands:

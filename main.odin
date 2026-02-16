@@ -3,6 +3,7 @@ package main
 import "core:encoding/json"
 import "core:fmt"
 import "core:os"
+import "core:path/filepath"
 import "core:strings"
 
 import "config"
@@ -40,6 +41,7 @@ CLI_Options :: struct {
 	version: bool,
 	list_rules: bool,
 	validate: bool,
+	ignore_patterns: [dynamic]string,
 	template: string,
 }
 
@@ -68,6 +70,7 @@ print_usage :: proc() {
 	fmt.println("  --version            Show version")
 	fmt.println("  --list-rules         List all available security rules")
 	fmt.println("  --validate           Validate config/policy and shell script syntax")
+	fmt.println("  --ignore             Ignore findings for file paths matching a glob (repeatable)")
 	fmt.println("  -h, --help           Show this help message")
 	fmt.println("")
 	fmt.println("Examples:")
@@ -79,6 +82,7 @@ print_usage :: proc() {
 	fmt.println("  sxs rules new --help")
 	fmt.println("  sxs policy new --help")
 	fmt.println("  sxs --validate script.sh")
+	fmt.println("  sxs --ignore 'vendor/*' script.sh")
 	os.exit(0)
 }
 
@@ -254,6 +258,27 @@ parse_options :: proc() -> CLI_Options {
 			if !format_explicit {
 				opts.format = .Text
 			}
+			i += 1
+			continue
+		}
+
+		if arg == "--ignore" {
+			if i + 1 >= len(args) {
+				fmt.eprintln("Error: --ignore requires a pattern argument")
+				os.exit(1)
+			}
+			i += 1
+			append(&opts.ignore_patterns, args[i])
+			i += 1
+			continue
+		}
+		if strings.has_prefix(arg, "--ignore=") {
+			pattern := strings.trim_prefix(arg, "--ignore=")
+			if pattern == "" {
+				fmt.eprintln("Error: --ignore= requires a non-empty pattern")
+				os.exit(1)
+			}
+			append(&opts.ignore_patterns, pattern)
 			i += 1
 			continue
 		}
@@ -449,6 +474,45 @@ convert_finding :: proc(f: shellx.SecurityFinding) -> formatter.Finding {
 	}
 }
 
+destroy_finding :: proc(f: formatter.Finding) {
+	_ = f
+}
+
+path_matches_ignore_pattern :: proc(path, pattern: string) -> bool {
+	if path == "" || pattern == "" {
+		return false
+	}
+
+	matched, err := filepath.match(pattern, path)
+	if err == .None && matched {
+		return true
+	}
+
+	base := filepath.base(path)
+	base_matched, base_err := filepath.match(pattern, base)
+	return base_err == .None && base_matched
+}
+
+finding_is_ignored :: proc(finding: formatter.Finding, patterns: []string) -> bool {
+	for pattern in patterns {
+		if path_matches_ignore_pattern(finding.location.file, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+recompute_blocked_from_findings :: proc(result: ^formatter.Scan_Result, threshold: string) {
+	result.blocked = false
+	threshold_severity := severity_to_shellx(threshold)
+	for finding in result.findings {
+		if severity_to_shellx(finding.severity) >= threshold_severity {
+			result.blocked = true
+			return
+		}
+	}
+}
+
 run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Result {
 	result: formatter.Scan_Result
 	result.findings = make([dynamic]formatter.Finding, 0, 8)
@@ -622,7 +686,12 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 		}
 		
 		for f in scan_result.findings {
-			append(&result.findings, convert_finding(f))
+			converted := convert_finding(f)
+			if finding_is_ignored(converted, opts.ignore_patterns[:]) {
+				destroy_finding(converted)
+				continue
+			}
+			append(&result.findings, converted)
 		}
 		
 		result.success = scan_result.success
@@ -680,7 +749,12 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 			}
 			
 			for f in scan_result.findings {
-				append(&result.findings, convert_finding(f))
+				converted := convert_finding(f)
+				if finding_is_ignored(converted, opts.ignore_patterns[:]) {
+					destroy_finding(converted)
+					continue
+				}
+				append(&result.findings, converted)
 			}
 			
 			result.success = result.success && scan_result.success
@@ -700,6 +774,7 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 		}
 	}
 	
+	recompute_blocked_from_findings(&result, opts.block_threshold)
 	return result
 }
 
@@ -1181,6 +1256,10 @@ print_usage_json :: proc() {
       "description": "Validate config/policy and shell script syntax"
     },
     {
+      "flag": "--ignore",
+      "description": "Ignore findings for file paths matching a glob pattern (repeatable)"
+    },
+    {
       "flag": "-h, --help",
       "description": "Show this help message"
     }
@@ -1193,7 +1272,8 @@ print_usage_json :: proc() {
     "sxs rules new",
     "sxs rules new --help",
     "sxs policy new --help",
-    "sxs --validate script.sh"
+    "sxs --validate script.sh",
+    "sxs --ignore \"vendor/*\" script.sh"
   ]
 }`
 	fmt.println(json)
