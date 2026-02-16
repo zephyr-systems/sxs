@@ -1,0 +1,32 @@
+class Sxs < Formula
+  desc "Security scanner for shell scripts powered by ShellX"
+  homepage "https://github.com/zephyr-systems/sxs"
+  version "0.1.0"
+
+  # Update these for each release:
+  url "https://github.com/zephyr-systems/sxs/releases/download/v#{version}/sxs-#{version}-darwin-arm64.tar.gz"
+  sha256 "REPLACE_WITH_TARBALL_SHA256"
+
+  depends_on :macos
+
+  def install
+    bin.install "sxs"
+    bin.install "libtree-sitter-bash.dylib"
+    bin.install "libtree-sitter-zsh.dylib"
+    bin.install "libtree-sitter-fish.dylib"
+
+    system "install_name_tool", "-change", "libtree-sitter-bash.dylib", "@loader_path/libtree-sitter-bash.dylib", bin/"sxs"
+    system "install_name_tool", "-change", "libtree-sitter-zsh.dylib", "@loader_path/libtree-sitter-zsh.dylib", bin/"sxs"
+    system "install_name_tool", "-change", "libtree-sitter-fish.dylib", "@loader_path/libtree-sitter-fish.dylib", bin/"sxs"
+
+    man1.install "sxs.1"
+    prefix.install "README.md"
+    prefix.install "LICENSE"
+  end
+
+  test do
+    assert_match "SXS (ShellX Scanner)", shell_output("#{bin}/sxs --help")
+    out = shell_output("#{bin}/sxs --list-policies --format json")
+    assert_match "\"schema_version\": \"1.0\"", out
+  end
+end

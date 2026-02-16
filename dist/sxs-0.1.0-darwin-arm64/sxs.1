@@ -1,0 +1,133 @@
+.TH SXS 1 "February 2026" "sxs 0.1.0" "User Commands"
+.SH NAME
+sxs \- security scanner for shell scripts
+.SH SYNOPSIS
+.B sxs
+[\fIdialect\fR] [\fIfile\fR ...] [\fIoptions\fR]
+.br
+.B sxs
+\fBrules new\fR [\fIfile\fR]
+.br
+.B sxs
+\fBpolicy new\fR [\fIfile\fR]
+.SH DESCRIPTION
+\fBsxs\fR scans shell scripts for security issues using built-in and custom rules.
+It supports text and AST-based analysis through ShellX.
+.SH DIALECTS
+Optional dialect argument:
+.TP
+.B auto
+Auto-detect from file/path (default).
+.TP
+.B bash
+Bash syntax.
+.TP
+.B zsh
+Zsh syntax.
+.TP
+.B fish
+Fish syntax.
+.TP
+.B posix
+POSIX sh syntax.
+.SH OPTIONS
+.TP
+.BR \-f ", " \-\-format " " \fIjson|text|sarif\fR
+Output format. Default is \fBjson\fR for scan mode.
+.TP
+.BR \-p ", " \-\-policy " " \fIPATH\fR
+Path to policy JSON file.
+.TP
+.BR \-\-stdin
+Read script input from standard input.
+.TP
+.BR \-o ", " \-\-output " " \fIPATH\fR
+Write output to file instead of stdout.
+.TP
+.BR \-\-no\-builtin
+Disable built-in rules.
+.TP
+.BR \-\-block\-threshold " " \fIInfo|Warning|High|Critical\fR
+Severity threshold that marks run as blocked. Default is \fBHigh\fR.
+.TP
+.BR \-\-ignore " " \fIGLOB\fR
+Ignore findings for file paths matching glob. Repeatable.
+.TP
+.BR \-\-ignore\-rule " " \fIRULE_ID\fR
+Ignore findings for specific rule ID. Repeatable.
+.TP
+.BR \-\-list\-rules
+List available built-in and loaded custom rules.
+.TP
+.BR \-\-list\-policies
+List available policy sources.
+.TP
+.BR \-\-validate
+Validate config/policy and shell syntax. Defaults to text output.
+.TP
+.BR \-\-test\-rules " " \fIRULES_FILE\fR
+Test only custom rules from rules file against input.
+.TP
+.BR \-q ", " \-\-quiet
+Reduce output noise (show findings-focused output).
+.TP
+.BR \-v ", " \-\-verbose
+Verbose output with additional scan/policy details.
+.TP
+.BR \-\-version
+Print version and exit.
+.TP
+.BR \-h ", " \-\-help
+Show help and exit.
+.SH COMMANDS
+.TP
+.B rules new [file]
+Generate custom rules template JSON.
+.TP
+.B policy new [file]
+Generate policy template JSON.
+.SH EXIT STATUS
+.TP
+.B 0
+Success. No blocking findings and no fatal errors.
+.TP
+.B 1
+Execution/validation failure.
+.TP
+.B 2
+Scan completed but blocked by configured threshold.
+.SH EXAMPLES
+.TP
+Scan a file:
+.B sxs script.sh
+.TP
+Scan stdin:
+.B cat script.sh | sxs --stdin
+.TP
+Use policy file:
+.B sxs -p policy.json script.sh
+.TP
+List policies as JSON:
+.B sxs --list-policies -f json
+.TP
+Validate policy and script:
+.B sxs --validate -p policy.json script.sh
+.SH FILES
+.TP
+.B ./sxs.json
+Project-local config (first tier).
+.TP
+.B ~/.zephyr/modules/sxs/config.json
+Module config tier.
+.TP
+.B ~/.config/sxs/config.json
+User-global config tier.
+.SH JSON SCHEMA NOTE
+For automation consumers, list-policies JSON includes:
+.TP
+.B schema_version
+Current value: \fB1.0\fR.
+.br
+Treat this as the compatibility key for parsing.
+.SH SEE ALSO
+.BR jq (1)

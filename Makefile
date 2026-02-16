@@ -1,4 +1,4 @@
-.PHONY: help build install install-man clean run dev deps bundle-libs
+.PHONY: help build install install-man clean run dev deps bundle-libs release
 
 .DEFAULT_GOAL := build
 
@@ -7,6 +7,7 @@ SHELLX_PATH := ../shellx
 
 VERSION := 0.1.0
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+VERSION_ARG ?= $(VERSION)
 
 BUILD_METADATA_FLAGS := -define:VERSION="$(VERSION)" -define:BUILD_TIME="$(BUILD_TIME)"
 
@@ -19,6 +20,7 @@ help:
 	@echo "  deps   - Clone ShellX dependency (if not already present)"
 	@echo "  build  - Build the sxs binary"
 	@echo "  bundle-libs - Copy required tree-sitter dylibs next to sxs binary"
+	@echo "  release - Build release tarball and SHA (requires VERSION=...)"
 	@echo "  install - Install to ~/.local/bin"
 	@echo "  install-man - Install man page to ~/.local/share/man/man1"
 	@echo "  clean  - Remove build artifacts"
@@ -51,6 +53,13 @@ install-man:
 	@mkdir -p ~/.local/share/man/man1
 	@cp docs/sxs.1 ~/.local/share/man/man1/
 	@echo "Installed man page to ~/.local/share/man/man1/sxs.1"
+
+release:
+	@if [ -z "$(VERSION_ARG)" ]; then \
+		echo "VERSION is required (example: make release VERSION=0.1.0)"; \
+		exit 1; \
+	fi
+	@./scripts/package_release.sh $(VERSION_ARG)
 
 clean:
 	rm -f $(BINARY)
