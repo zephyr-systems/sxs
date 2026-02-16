@@ -2,6 +2,7 @@ package formatter
 
 import "core:encoding/json"
 import "core:fmt"
+import "core:os"
 import "core:strings"
 
 Finding :: struct {
@@ -70,11 +71,12 @@ format_result_text :: proc(result: Scan_Result, verbose: bool, source: string) -
 		return strings.clone(strings.to_string(builder))
 	}
 	
-	cyan := "\x1b[36m"
-	yellow := "\x1b[33m"
-	red := "\x1b[31m"
-	magenta := "\x1b[35;1m"
-	reset := "\x1b[0m"
+	use_color := text_color_enabled()
+	cyan := text_color(use_color, "\x1b[36m")
+	yellow := text_color(use_color, "\x1b[33m")
+	red := text_color(use_color, "\x1b[31m")
+	magenta := text_color(use_color, "\x1b[35;1m")
+	reset := text_color(use_color, "\x1b[0m")
 	
 	critical_count := 0
 	high_count := 0
@@ -205,6 +207,24 @@ format_result_text :: proc(result: Scan_Result, verbose: bool, source: string) -
 	}
 	
 	return strings.clone(strings.to_string(builder))
+}
+
+text_color_enabled :: proc() -> bool {
+	if os.get_env("CLICOLOR_FORCE") == "1" {
+		return true
+	}
+	if os.get_env("NO_COLOR") != "" || os.get_env("SXS_NO_COLOR") != "" {
+		return false
+	}
+	term := os.get_env("TERM")
+	return term != "" && term != "dumb"
+}
+
+text_color :: proc(enabled: bool, code: string) -> string {
+	if enabled {
+		return code
+	}
+	return ""
 }
 
 format_result_sarif :: proc(result: Scan_Result, source: string, version: string) -> string {

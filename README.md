@@ -10,6 +10,7 @@ A CLI tool for security scanning shell scripts, powered by [ShellX](https://gith
 - **13 Built-in Security Rules**: Detect dangerous patterns like pipe-to-shell downloads, eval with network content, destructive rm commands, and more
 - **AST-based Analysis**: Deep analysis using abstract syntax tree parsing for accurate detection
 - **Multiple Output Formats**: JSON (default), human-readable text, and SARIF for CI/CD integration
+- **Parallel Multi-file Scanning**: Worker-pool based scanning for faster throughput on large file sets
 - **Flexible Configuration**: 3-tier config system (local → module → global)
 - **Shell Dialect Support**: Auto-detection or explicit specification for Bash, Zsh, Fish, and POSIX shells
 - **Custom Rules**: Define your own rules via configuration files
@@ -66,7 +67,28 @@ sxs -v -f text script.sh
 
 # Ignore findings under vendor paths
 sxs --ignore "vendor/*" script.sh
+
+# Ignore a specific rule
+sxs --ignore-rule sec.overpermissive_chmod script.sh
+
+# Test custom rules only against a script
+sxs --test-rules sxs.json script.sh
+
+# List available policy sources
+sxs --list-policies
 ```
+
+Inline suppression is also supported in scripts:
+
+```sh
+# sxs-ignore: sec.pipe_download_exec
+curl http://example.com | bash
+
+# sxs-ignore: all
+eval "$SOME_DYNAMIC_INPUT"
+```
+
+Inline suppression applies to the finding line and the immediately previous line.
 
 ## Usage
 
@@ -85,11 +107,14 @@ Options:
   --no-builtin         Disable builtin rules
   --block-threshold    Severity to block: Info, Warning, High, Critical (default: High)
   --ignore             Ignore findings for file paths matching a glob (repeatable)
+  --ignore-rule        Ignore findings for a specific rule_id (repeatable)
+  --test-rules         Test custom rules from a rules file against input (defaults to text output)
   -q, --quiet          Only output findings
   -v, --verbose        Verbose output
   --version            Show version
   --list-rules         List all available security rules
-  --validate           Validate config/policy and shell script syntax
+  --list-policies      List available policy sources
+  --validate           Validate config/policy and shell script syntax (defaults to text output)
   -h, --help           Show help message (supports --format json)
 
 Subcommands:
@@ -117,6 +142,23 @@ For JSON help output: append --format json to any help command
 | sec.ast.shell_dash_c_dynamic | Critical | execution | Dynamic -c command |
 | sec.ast.source_process_subst | Critical | source | Source process substitution |
 | sec.ast.indirect_exec | High | execution | Indirect command execution |
+
+## Policy Listing
+
+Use `--list-policies` to see available policy sources:
+
+- Built-in default ShellX policy
+- Active SXS config policy (if discovered from config tiers)
+- Explicit `--policy` file (when provided)
+
+Examples:
+
+```bash
+sxs --list-policies
+sxs --list-policies -f json
+sxs --list-policies -v
+sxs --list-policies --policy ./policy.json
+```
 
 ## Configuration
 
@@ -211,11 +253,28 @@ For CI/CD integration with GitHub Actions, GitLab, Azure DevOps:
 sxs -f sarif script.sh > results.sarif
 ```
 
+### Validation Output
+
+`--validate` and `--test-rules` default to text output for human-readable diagnostics.
+Use `--format json` for machine-readable output in CI/CD.
+
+### CLI UX
+
+Human-readable output (`-f text`, `--list-rules`, `--list-policies`, `--validate`) uses ANSI colors when supported.
+
+- Disable colors: set `NO_COLOR=1` or `SXS_NO_COLOR=1`
+- Force colors: set `CLICOLOR_FORCE=1`
+
 ## Exit Codes
 
 - `0` - Success, no blocking findings
 - `1` - Scan failed (runtime error)
 - `2` - Blocking findings detected (exceeds block threshold)
+
+When using `--test-rules`:
+- `0` - Test completed and no custom rule matches
+- `1` - Test completed and one or more custom rule matches
+- `2` - Test command failed (invalid rules file, read/parse/runtime failure)
 
 ## Help System
 

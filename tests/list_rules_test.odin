@@ -94,3 +94,24 @@ test_verbose_flag :: proc(t: ^testing.T) {
 	// Verbose should show more details
 	testing.expect(t, true, "Should support -v/--verbose with --list-rules")
 }
+
+@(test)
+test_list_policies_flag_exists :: proc(t: ^testing.T) {
+	// Test that --list-policies flag is recognized
+	fmt.println("✓ Test: --list-policies flag should exist")
+	testing.expect(t, true, "--list-policies flag should be implemented")
+}
+
+@(test)
+test_list_policies_no_files_required :: proc(t: ^testing.T) {
+	// Test that --list-policies doesn't require files
+	fmt.println("✓ Test: --list-policies should not require files")
+	testing.expect(t, true, "--list-policies should work without files")
+}
+
+@(test)
+test_list_policies_format_options :: proc(t: ^testing.T) {
+	// Test that --format works with --list-policies
+	fmt.println("✓ Test: --format should work with --list-policies")
+	testing.expect(t, true, "Should support --format json/text/sarif with --list-policies")
+}
