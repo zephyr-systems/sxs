@@ -175,6 +175,7 @@ parse_options :: proc() -> CLI_Options {
 	opts.dialect = .Auto
 	opts.format = .JSON
 	opts.block_threshold = "High"
+	format_explicit := false
 
 	args := os.args[1:]
 	
@@ -250,6 +251,9 @@ parse_options :: proc() -> CLI_Options {
 
 		if arg == "--validate" {
 			opts.validate = true
+			if !format_explicit {
+				opts.format = .Text
+			}
 			i += 1
 			continue
 		}
@@ -277,6 +281,7 @@ parse_options :: proc() -> CLI_Options {
 				fmt.eprintln("Error: invalid format, must be json, text, or sarif")
 				os.exit(1)
 			}
+			format_explicit = true
 			i += 1
 			continue
 		}
@@ -590,7 +595,7 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 	shell_dialect := dialect_to_shellx(opts.dialect)
 	
 	if opts.stdin {
-		data, ok := os.read_entire_file(os.stdin)
+		data, ok := read_stdin_bytes()
 		if !ok {
 			result.success = false
 			append(&result.errors, "Failed to read from stdin")
@@ -622,7 +627,9 @@ run_scan :: proc(opts: CLI_Options, cfg: config.SXS_Config) -> formatter.Scan_Re
 		
 		result.success = scan_result.success
 		result.blocked = scan_result.blocked
-		result.ruleset_version = scan_result.ruleset_version
+			if scan_result.ruleset_version != "" {
+				result.ruleset_version = strings.clone(scan_result.ruleset_version)
+			}
 		result.stats = formatter.Scan_Stats{
 			files_scanned = 1,
 			lines_scanned = scan_result.stats.lines_scanned,
@@ -797,6 +804,26 @@ validate_script_content :: proc(
 	return false
 }
 
+read_stdin_bytes :: proc() -> ([]byte, bool) {
+	out := make([dynamic]byte, 0, 4096)
+	buf := make([]byte, 4096)
+	for {
+		n, err := os.read(os.stdin, buf)
+		if err != nil {
+			delete(out)
+			return nil, false
+		}
+		if n == 0 {
+			break
+		}
+		for b in buf[:n] {
+			append(&out, b)
+		}
+	}
+	delete(buf)
+	return out[:], true
+}
+
 run_validate :: proc(opts: CLI_Options, cfg: config.SXS_Config, config_data: string, config_location: config.Config_Location) {
 	_ = cfg
 
@@ -833,12 +860,15 @@ run_validate :: proc(opts: CLI_Options, cfg: config.SXS_Config, config_data: str
 	script_count := len(opts.files)
 	if opts.stdin {
 		script_count += 1
-		data, ok := os.read_entire_file(os.stdin)
+		data, ok := read_stdin_bytes()
 		if !ok {
 			scripts_valid = false
-			append_validation_error(&errors, "<stdin>", "Failed to read from stdin")
+			append_validation_error(&errors, "<stdin>", "Failed to read from stdin", "Pipe input: cat file.sh | sxs --validate --stdin")
 		} else {
-			if !validate_script_content("<stdin>", string(data), opts, &errors) {
+			if len(data) == 0 {
+				scripts_valid = false
+				append_validation_error(&errors, "<stdin>", "No stdin input provided", "Pipe input: cat file.sh | sxs --validate --stdin")
+			} else if !validate_script_content("<stdin>", string(data), opts, &errors) {
 				scripts_valid = false
 			}
 			delete(data)
